@@ -80,6 +80,7 @@ core/llm/router.py
 core/llm/structured.py
 core/llm/providers/claude.py
 core/llm/providers/gemini.py
+core/llm/providers/groq.py
 core/llm/providers/openai.py
 core/models/__init__.py
 core/models/pr.py
