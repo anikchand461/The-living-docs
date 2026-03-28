@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     repo: str = "your-org/your-repo"
     confidence_threshold: int = 80
 
-    model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_ignore_empty=True,
+        case_sensitive=False,
+        extra="ignore"
+    )
 
 settings = Settings()
