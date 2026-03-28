@@ -26,14 +26,14 @@ class MCPClient:
                 logger.error(f"Notion search failed: {resp.text}")
                 return []
             results = resp.json().get("results", [])
-            return [
-                {
-                    "id": r["id"],
-                    "title": r.get("properties", {}).get("title", {}).get("title", [{}])[0].get("plain_text", "Untitled")
-                    if r.get("properties") else "Untitled"
-                }
-                for r in results
-            ]
+            pages = []
+            for r in results:
+                try:
+                    title = r["properties"]["title"]["title"][0]["plain_text"]
+                except Exception:
+                    title = "Untitled"
+                pages.append({"id": r["id"], "title": title})
+            return pages
 
     async def append_block(self, page_id: str, blocks: list) -> dict:
         async with httpx.AsyncClient() as client:
@@ -43,6 +43,8 @@ class MCPClient:
                 json={"children": blocks},
                 timeout=30.0
             )
+            if resp.status_code != 200:
+                logger.error(f"Notion append failed: {resp.text}")
             resp.raise_for_status()
             return resp.json()
 
@@ -79,12 +81,8 @@ class MCPClient:
 
     async def execute_plan(self, plan: ContentPlan):
         page_id = plan.target_page_id or settings.notion_page_id
-        blocks = plan.blocks or [
-            {"object": "block", "type": "paragraph", "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": f"Auto-updated by living-docs. Reason: {plan.reason}"}}]
-            }}
-        ]
-        logger.info(f"[Notion] Appending block to page {page_id}")
+        blocks = plan.blocks or []
+        logger.info(f"[Notion] Writing doc update to page {page_id}")
         return await self.append_block(page_id, blocks)
 
     async def create_new_page(self, plan: ContentPlan):
@@ -93,9 +91,9 @@ class MCPClient:
         return await self.create_page(title)
 
     async def flag_for_review(self, pr_number: int, plan: ContentPlan):
-        page_id = settings.notion_page_id
-        text = f"⚠️ PR #{pr_number} needs human review. Low confidence match. Reason: {plan.reason}"
-        logger.info(f"[Notion] Flagging PR #{pr_number} for review on page {page_id}")
+        page_id = plan.target_page_id or settings.notion_page_id
+        text = f"⚠️ PR #{pr_number} needs human review. Reason: {plan.reason}"
+        logger.info(f"[Notion] Flagging PR #{pr_number} for review")
         return await self.create_comment(page_id, text)
 
     async def check_idempotency(self, pr_number: int, diff_hash: str) -> bool:

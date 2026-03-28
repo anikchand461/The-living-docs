@@ -23,4 +23,5 @@ Requires-Dist: prometheus-fastapi-instrumentator>=7.0.0
 Requires-Dist: sqlalchemy>=2.0.0
 Requires-Dist: alembic>=1.14.0
 Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: google-genai
 Dynamic: license-file

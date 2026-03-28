@@ -24,26 +24,28 @@ class MCPAgentCore:
     async def process(self, event: PREvent) -> dict:
         logger.info(f"Processing PR #{event.pr_number}")
 
-        # Idempotency Guard
         event.diff_hash = compute_diff_hash(event.diff)
         if await self.notion_client.check_idempotency(event.pr_number, event.diff_hash):
             return {"status": "already_processed"}
 
-        # Diff Pre-processor (diagram step)
         processed_diff = self.diff_processor.process(event.diff)
+        logger.info(f"Changed modules: {processed_diff.impacted_modules}")
 
-        # MCP Agent Core (Claude) – all sub-components
         mappings = await self.page_resolver.resolve(processed_diff)
-        confidence = await self.confidence_scorer.score(processed_diff, mappings)
-        plan = await self.content_planner.plan(processed_diff, mappings, confidence)
+        logger.info(f"Found {len(mappings)} matching Notion pages")
 
-        # Decision Gate
+        confidence = await self.confidence_scorer.score(processed_diff, mappings)
+        logger.info(f"Confidence: {confidence.score}% — {confidence.explanation}")
+
+        plan = await self.content_planner.plan(processed_diff, mappings, confidence)
+        logger.info(f"Plan: {plan.action} on page {plan.target_page_id}")
+
         decision = self.decision_gate.evaluate(confidence.score)
 
         if decision == "auto_write":
             await self.notion_client.execute_plan(plan)
             await self.staleness_tracker.update(plan.target_page_id, event.pr_number)
-            await self.github_client.post_comment(event.pr_number, f"✅ Docs auto-updated: {plan.target_page_id}")
+            await self.github_client.post_comment(event.pr_number, f"✅ Notion docs updated: notion.so/{plan.target_page_id}")
         elif decision == "create_page":
             await self.notion_client.create_new_page(plan)
         else:
@@ -53,5 +55,6 @@ class MCPAgentCore:
             "pr": event.pr_number,
             "confidence": confidence.score,
             "action": decision,
-            "notion_page": plan.target_page_id
+            "notion_page": plan.target_page_id,
+            "explanation": confidence.explanation
         }
